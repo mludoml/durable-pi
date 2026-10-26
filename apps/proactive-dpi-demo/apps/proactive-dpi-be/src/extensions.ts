@@ -8,6 +8,7 @@ import {
   hook,
   section,
   type TaskId,
+  type TaskRuntime,
   type ToolExecutionApi,
 } from "@earendil-works/pi-durable";
 import type { Context } from "@earendil-works/chord";
@@ -15,12 +16,29 @@ import type { Deploy, Incident, IncidentStatus, StreamRow } from "../../../share
 import { verifyAndCommit } from "./repo.ts";
 import type { WatchStore } from "./watch-store.ts";
 
+/** Wait `ms` inside a phase on the Harness timer, for short polls; a restart reruns the phase. Rejects on abort. */
+const pause = (runtime: Pick<TaskRuntime<never, { phase: string }, never, object>, "setTimer" | "signal">, ms: number) =>
+  new Promise<void>((resolve, reject) => {
+    const { signal } = runtime;
+    if (signal.aborted) return reject(signal.reason);
+    const onAbort = () => {
+      disarm();
+      reject(signal.reason);
+    };
+    const disarm = runtime.setTimer(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+
 /** Every incident the watcher opened. Session scoped: shared by all conversations, committed atomically. */
 export const Incidents = defineDoc<{ seq: number; items: Record<string, Incident> }>({
   kind: "ops.incidents",
   version: 1,
   scope: "session",
   initial: () => ({ seq: 0, items: {} }),
+  checkpointWhen: () => false,
 });
 
 /** Every deploy request and where its durable task stands. Session scoped, so any client can approve it. */
@@ -29,6 +47,7 @@ export const Deploys = defineDoc<{ items: Record<string, Deploy> }>({
   version: 1,
   scope: "session",
   initial: () => ({ items: {} }),
+  checkpointWhen: () => false,
 });
 
 /** The incident timeline. An agent reports each stage in order; submit_fix and the deploy finish it. */
@@ -107,7 +126,7 @@ export function createExtensions(deps: {
       const text = rows.length
         ? rows.map((row) => (args.full ? `${logLine(row)}\n${JSON.stringify(row.entry)}` : logLine(row))).join("\n")
         : "No matching rows.";
-      return { content: [{ type: "text", text: `${rows.length} rows, newest first\n${text}` }] };
+      return { output: [{ type: "text", text: `${rows.length} rows, newest first\n${text}` }] };
     },
   });
 
@@ -121,7 +140,7 @@ export function createExtensions(deps: {
     }),
     replay: "safe",
     execute: async (args) => ({
-      content: [
+      output: [
         {
           type: "text",
           text: JSON.stringify(deps.store.summary(args.since_minutes ?? 15, args.service), null, 1),
@@ -138,7 +157,7 @@ export function createExtensions(deps: {
     execute: async (_args, api, context) => {
       const doc = await api.snapshot(Incidents, context);
       const items = Object.values(doc?.items ?? {}).map(({ timeline: _, ...incident }) => incident);
-      return { content: [{ type: "text", text: items.length ? JSON.stringify(items, null, 1) : "No incidents." }] };
+      return { output: [{ type: "text", text: items.length ? JSON.stringify(items, null, 1) : "No incidents." }] };
     },
   });
 
@@ -195,7 +214,7 @@ export function createExtensions(deps: {
         item.summary = args.summary;
         if (args.root_cause) item.report.rootCause = args.root_cause;
       });
-      return { content: [{ type: "text", text: `${incident.id} is now ${incident.status}.` }] };
+      return { output: [{ type: "text", text: `${incident.id} is now ${incident.status}.` }] };
     },
   });
 
@@ -229,7 +248,7 @@ export function createExtensions(deps: {
         };
       });
       return {
-        content: [
+        output: [
           {
             type: "text",
             text: `Committed ${proof.head} on ${incident.branch}. ${incident.id} is ready for review.\n${tests}\n${proof.diffStat}`,
@@ -272,7 +291,7 @@ export function createExtensions(deps: {
             }, context);
             return;
           }
-          await runtime.sleep(runtime.now() + 400, context);
+          await pause(runtime, 400);
         }
       },
       rollout: async (task, runtime, context) => {
@@ -290,7 +309,7 @@ export function createExtensions(deps: {
             }, context);
             return;
           }
-          await runtime.sleep(runtime.now() + 250, context);
+          await pause(runtime, 250);
         }
         await runtime.commit(async (tx) => {
           (await tx.doc(Deploys)).items[String(task.id)].status = "verifying";
@@ -301,7 +320,7 @@ export function createExtensions(deps: {
         const { revision, liveAt } = task.state.checkpoint as { revision: string; liveAt: number };
         let stats = deps.store.checkoutStats(revision);
         while (stats.checkouts < 3 && runtime.now() < liveAt + 20_000) {
-          await runtime.sleep(runtime.now() + 400, context);
+          await pause(runtime, 400);
           stats = deps.store.checkoutStats(revision);
         }
         const ok = stats.checkouts > 0 && stats.errors === 0;
@@ -361,7 +380,7 @@ export function createExtensions(deps: {
     execute: async (args, api, context) => {
       const incident = await ownIncident(api, context);
       if (incident.status === "deployed")
-        return { content: [{ type: "text", text: `Already deployed as ${incident.report.deployedRevision}.` }] };
+        return { output: [{ type: "text", text: `Already deployed as ${incident.report.deployedRevision}.` }] };
       if (incident.status !== "ready_for_review" || !incident.report.commit)
         throw Error("Nothing to deploy yet. Run submit_fix first.");
       const commit = incident.report.commit;
@@ -419,7 +438,7 @@ export function createExtensions(deps: {
       if (outcome.status === "completed" && outcome.result.approved) {
         const r = outcome.result;
         return {
-          content: [
+          output: [
             {
               type: "text",
               text: `Deployed ${commit} as ${r.revision}. Verified on live traffic: ${r.checkouts} checkouts, ${r.guests} from guests, ${r.errors} errors.`,
@@ -429,7 +448,7 @@ export function createExtensions(deps: {
       }
       if (outcome.status === "completed")
         return {
-          content: [
+          output: [
             {
               type: "text",
               text: `The engineer declined the deploy${outcome.result.note ? `: ${outcome.result.note}` : ""}. Nothing shipped. Wait for their direction and call deploy again only if they ask.`,

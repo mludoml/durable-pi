@@ -86,7 +86,7 @@ export class Ops extends EventEmitter {
             // Tool calls run in the order the agent writes them, so its timeline reads in order.
             toolExecution: "sequential",
           },
-          onReport: (e) => console.error("[durable]", e),
+          onReport: (e, info) => console.error(`[durable] ${info.type}:`, e),
         },
         ctx,
       );

@@ -176,7 +176,7 @@ onBeforeUnmount(() => {
             </p>
           </div>
         </div>
-        <span class="version">v{{ config?.version ?? "1.0.3" }}</span>
+        <span class="version">v{{ config?.version ?? "1.4.0" }}</span>
       </div>
     </header>
     <div v-if="error" class="error-banner" role="alert">

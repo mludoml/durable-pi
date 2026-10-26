@@ -27,6 +27,7 @@ const status = (value: string) =>
   ({
     running: "Running",
     waiting: "Waiting",
+    sleeping: "Sleeping",
     completed: "Completed",
     aborted: "Stopped",
     declined: "Declined",
