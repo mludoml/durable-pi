@@ -28,6 +28,7 @@ The contract every Durable Agent Network client uses: the web hub, `dpi-tui`, sc
 | `GET /v1/sessions/:s/events` | | session stream |
 | `GET /v1/sessions/:s/tasks` | `?status=live\|terminal&limit=` | task nodes / recent outcomes |
 | `POST /v1/sessions/:s/tasks/:taskId/abort` | | `{status}` |
+| `POST /v1/sessions/:s/tasks/:taskId/retry` | | `{ok}`: runs a task parked by the crash-loop guard (`blocked: "restart_limit"` on its task node, after 5 crashes in a row without a new checkpoint) again; does nothing for a task that is not parked |
 | `GET /v1/sessions/:s/inspect` | | recovery inspection |
 | `GET /v1/sessions/:s/submissions/:id` | `?waitMs=` (≤300000) | `SendResult`, optionally long-polled |
 | `GET / POST /v1/sessions/:s/agents` | POST `{from?, name?}` | `AgentSummary[]` / `201 AgentSummary` |

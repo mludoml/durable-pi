@@ -638,6 +638,7 @@ export class Store {
       owner?: number;
       background: boolean;
       abortRequested?: boolean;
+      blocked?: string;
       state: { status: string; phase?: string; on?: readonly number[]; policy?: string; outcome?: string };
       conversations?: readonly number[];
     };
@@ -648,6 +649,7 @@ export class Store {
       ...(n.owner !== undefined ? { owner: n.owner } : {}),
       background: !!n.background,
       ...(n.abortRequested ? { aborting: true } : {}),
+      ...(n.blocked ? { blocked: n.blocked } : {}),
       state: {
         status: n.state.status,
         ...(n.state.phase ? { phase: n.state.phase } : {}),
@@ -880,6 +882,14 @@ export class Store {
     const task = await h.getTask(taskId as TaskId, ctx);
     if (!task) throw notFound(`No task ${taskId}`);
     return { status: await h.abortTask(task.id, ctx) };
+  }
+
+  /** Run a task the restart limit parked again. A task that is not parked is left as it is. */
+  async retryTask(h: Harness, taskId: number) {
+    const task = await h.getTask(taskId as TaskId, ctx);
+    if (!task) throw notFound(`No task ${taskId}`);
+    await h.retryTask(task.id, ctx);
+    return { ok: true };
   }
 
   async inspect(h: Harness) {

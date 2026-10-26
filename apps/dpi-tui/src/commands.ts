@@ -114,7 +114,7 @@ export async function runCommand(app: App, text: string): Promise<boolean> {
           if (!tasks.length) lines.push(c.muted("No live tasks."));
           for (const t of tasks)
             lines.push(
-              `${t.background ? c.secondary("◌ bg") : c.warn("● fg")} #${t.id} ${t.kind} ${c.muted(`agent #${t.conversationId} │ ${t.state.status}${t.state.phase ? `/${t.state.phase}` : ""}`)}`,
+              `${t.background ? c.secondary("◌ bg") : c.warn("● fg")} #${t.id} ${t.kind} ${c.muted(`agent #${t.conversationId} │ ${t.state.status}${t.state.phase ? `/${t.state.phase}` : ""}`)}${t.blocked ? ` ${c.warn(`blocked: ${t.blocked}`)}` : ""}`,
             );
           lines.push("", c.muted("esc close"));
           return lines;

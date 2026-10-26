@@ -7,6 +7,7 @@ import {
   Layers,
   Octagon,
   Play,
+  RotateCcw,
   Repeat,
   ShieldCheck,
   Workflow,
@@ -16,7 +17,7 @@ import type { TaskNode, TaskOutcome } from "@sdk/api";
 import { jobRunDone } from "@sdk/jobs";
 import { message } from "../client/hub";
 import { agentHandle, sessionHandle, tasks } from "../client/store";
-import { decide, jobDef, jobDefs, jobRuns, openAgent, pending, revealRun, startJob } from "../client/jobs";
+import { decide, jobDef, jobDefs, jobRuns, openAgent, pending, retryTask, revealRun, startJob } from "../client/jobs";
 
 const error = ref("");
 const stopping = ref(false);
@@ -36,6 +37,14 @@ const status = (value: string) =>
     completing: "Finishing",
     terminal: "Finished",
   })[value] ?? value;
+
+const blockedText = (reason: string) =>
+  ({
+    restart_limit: "Parked after repeated crashes",
+    missing_task: "No definition on this device",
+    task_too_old: "Definition is newer",
+    migration_failed: "Migration failed",
+  })[reason] ?? reason;
 
 /** The newest run of each job, for its row in the list. */
 const latest = computed(() => new Map(jobDefs.value.map((d) => [d.id, jobRuns.value.find((r) => r.job === d.id)])));
@@ -191,12 +200,22 @@ const outcomes = computed(() =>
           <strong>{{ kindOf(task).name }}</strong>
           <span class="tag">{{ status(task.state.status) }}</span>
           <span v-if="phaseOf(task)" class="task-phase">{{ phaseOf(task) }}</span>
+          <span v-if="task.blocked" class="tag blocked" :data-blocked="task.blocked">{{ blockedText(task.blocked) }}</span>
           <small
             >#{{ task.id }} {{ kindOf(task).what }}, agent #{{ task.conversationId
             }}{{ task.effectiveBackground ? ", background" : "" }}</small
           >
           <button v-for="cid in task.conversations" :key="cid" class="text-button" @click="openAgent(cid)">
             Open agent #{{ cid }}
+          </button>
+          <button
+            v-if="task.blocked === 'restart_limit'"
+            class="text-button"
+            :disabled="!!pending"
+            :title="`Task #${task.id} crashed its process repeatedly before saving a checkpoint. Run it again from its last checkpoint.`"
+            @click="retryTask(task.id)"
+          >
+            <RotateCcw :size="14" />Retry
           </button>
         </li>
       </ul>

@@ -182,6 +182,9 @@ export class SessionHandle {
   abortTask(taskId: number) {
     return this.client.request<{ status: string }>("POST", `${this.base}/tasks/${taskId}/abort`, {});
   }
+  retryTask(taskId: number) {
+    return this.client.request<{ ok: boolean }>("POST", `${this.base}/tasks/${taskId}/retry`, {});
+  }
   inspect() {
     return this.client.request<unknown>("GET", `${this.base}/inspect`);
   }

@@ -477,6 +477,9 @@ svg {
 .tag.waiting {
   color: #f2eeee;
 }
+.tag.blocked {
+  color: #f2c94c;
+}
 .tag.aborted,
 .tag.rejected {
   color: #f2eeee;

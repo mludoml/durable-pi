@@ -252,6 +252,11 @@ export interface TaskNode {
   background: boolean;
   aborting?: boolean;
   state: { status: string; phase?: string; on?: number[]; policy?: string };
+  /**
+   * Why the task cannot run: `restart_limit` (parked after repeated crashes; `POST .../tasks/:id/retry` runs it again),
+   * or a missing or outdated definition (`missing_task`, `task_too_old`, `migration_failed`).
+   */
+  blocked?: string;
   conversations: number[];
   /** What the task is: the tool name of a `pi.tool` task, or the job title of a durable job. */
   label?: string;

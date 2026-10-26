@@ -73,6 +73,10 @@ export const decide = (run: JobRun, approved: boolean) =>
 export const stopRun = (run: JobRun) =>
   act(`stop:${run.id}`, () => sessionHandle.value!.abortTask(run.id));
 
+/** Run a task the crash-loop guard parked again. */
+export const retryTask = (taskId: number) =>
+  act(`retry:${taskId}`, () => sessionHandle.value!.retryTask(taskId));
+
 export function openAgent(conversationId: number) {
   if (selected.value) select({ ...selected.value, agentId: conversationId });
 }
