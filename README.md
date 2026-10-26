@@ -23,14 +23,14 @@ Open the repository in Claude Code (or Pi, or your favorite agentic coding tool)
 /install
 ```
 
-The command lives in [`.claude/commands/install.md`](.claude/commands/install.md). It checks Node 24, npm, just and zsh, confirms `OPENROUTER_API_KEY` in `.env` without printing it, runs `just install`, writes this machine's device config with `just net up local`, builds the web UI, offers to set up the proactive demo and finishes with `just check`. It never starts a server and never touches a device other than `local`. Run `/prime` afterwards to load the project context into your agent.
+The command lives in [`.claude/commands/install.md`](.claude/commands/install.md). It checks Node 24, npm, just and zsh, confirms model access (`OPENROUTER_API_KEY` or `OLLAMA_API_KEY` in `.env`, or a subscription login) without printing a key, runs `just install`, writes this machine's device config with `just net up local`, builds the web UI, offers to set up the proactive demo and finishes with `just check`. It never starts a server and never touches a device other than `local`. Run `/prime` afterwards to load the project context into your agent.
 
 ### Manual Install
 
-**Prereqs:** [Node.js 24](https://nodejs.org) (via [nvm](https://github.com/nvm-sh/nvm)), [`just`](https://github.com/casey/just), `zsh` (macOS ships it), an [OpenRouter](https://openrouter.ai) API key. Remote devices need passwordless `ssh`, and exe.dev VMs need an [exe.dev](https://exe.dev) account.
+**Prereqs:** [Node.js 24](https://nodejs.org) (via [nvm](https://github.com/nvm-sh/nvm)), [`just`](https://github.com/casey/just), `zsh` (macOS ships it), and model access. An [OpenRouter](https://openrouter.ai) API key is one option. Claude Pro/Max and ChatGPT subscriptions and Anthropic, OpenAI or Ollama Cloud keys work too, several at once (see [Subscriptions and providers](apps/dpi-backend/README.md#subscriptions-and-providers)). Remote devices need passwordless `ssh`, and exe.dev VMs need an [exe.dev](https://exe.dev) account.
 
 ```bash
-cp .env.example .env                           # set OPENROUTER_API_KEY; copied into each device's backend.env, never sent to clients
+cp .env.example .env                           # set OPENROUTER_API_KEY (or another provider's key); copied into each device's backend.env, never sent to clients
 cp dpi-network.example.yaml dpi-network.yaml   # your devices; starts with only `local`
 just install                                   # npm install for dpi-sdk, dpi-backend, dpi-playground and dpi-tui
 just net up local                              # write ~/.dpi/backend.env with a fresh token and register this machine
@@ -271,7 +271,7 @@ Each device owns its agents and their data in SQLite. The hub only stores how to
 ```text
 durable-pi/
 ├── dpi-network.example.yaml           # template for dpi-network.yaml (gitignored): devices, kinds, start_dirs
-├── .env.example                       # OPENROUTER_API_KEY (+ ELEVENLABS_API_KEY for the demo voice)
+├── .env.example                       # OPENROUTER_API_KEY, optional Anthropic/OpenAI/Ollama keys (+ ELEVENLABS_API_KEY for the demo voice)
 ├── justfile                           # install, check, and one module per work area
 ├── just/                              # net, backend, hub, tui, test, proactive (one mod.just each)
 ├── apps/
@@ -335,6 +335,7 @@ just proactive take        # reset and run the proactive demo
 - **The hub holds every token.** It binds `127.0.0.1` and checks Host and Origin headers. Binding it to the LAN exposes every device it can reach.
 - **`dpi-backend` binds `127.0.0.1` unless told otherwise.** For `ssh` and `exe-dev` devices, `just net up` writes `DPI_HOST=0.0.0.0` (the default for the YAML's `host`) so clients can reach them, and the token guards everything under `/v1`.
 - **`jev-damage-control` is a guard, not a sandbox.** It sends each command to a third-party API, and when Jev is unreachable the command runs.
+- **Claude subscription logins may break Anthropic's terms.** Anthropic allows Claude Free/Pro/Max OAuth only in Claude Code and claude.ai, so `just backend login anthropic` may get the account restricted. An `ANTHROPIC_API_KEY` avoids that.
 - **The proactive demo has no login** and its agents run `bash`. It binds `127.0.0.1` unless you pass `--host 0.0.0.0`.
 - **macOS devices run as a LaunchAgent** in the logged-in session, so unattended reboots need auto-login.
 - **pi-durable is experimental.** This repo pins 1.4.0. Its SQLite schema v2 migrates each session database on open, and 1.3.0 or earlier cannot open a migrated one.

@@ -27,6 +27,18 @@ dev *ARGS:
 token:
     npm run token
 
+# Sign this device in to a subscription provider (anthropic, openai or openrouter)
+login PROVIDER:
+    npm run login -- login "$1"
+
+# Remove a provider's stored credential
+logout PROVIDER:
+    npm run login -- logout "$1"
+
+# List stored provider credentials (types only, never secrets)
+auth:
+    npm run login -- status
+
 # Type check and run backend tests
 check:
     npm run check

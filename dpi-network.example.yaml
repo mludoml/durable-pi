@@ -36,8 +36,13 @@ defaults:
   home_dir: ~/.dpi                 # backend.env, data and logs; deploys never touch it
   start_dirs: ["~/dpi-work"]       # where new sessions start (created if missing); any existing folder works as a cwd
   env_keys: [OPENROUTER_API_KEY]   # secrets: copied by name from .env, never written here
+                                   # env_keys can also list ANTHROPIC_API_KEY, OPENAI_API_KEY, OLLAMA_API_KEY, OLLAMA_HOST
   # env:                           # plain settings, written as-is
-  #   DPI_PROVIDER: faux           # the free deterministic model, for tests
+  #   DPI_PROVIDER: openrouter,anthropic,openai,ollama-cloud   # several providers at once (default: openrouter)
+  #   DPI_DEFAULT_MODEL: anthropic/claude-sonnet-5-5            # <provider>/<modelId>
+  #   DPI_PROVIDER: faux           # instead: the free deterministic model, for tests
+  # Subscriptions (Claude Pro/Max, ChatGPT) are not env keys: run `just backend login <provider>`
+  # on the device itself, then restart its backend.
 
 devices:
   local:

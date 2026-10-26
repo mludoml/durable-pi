@@ -2,7 +2,9 @@
 import express from "express";
 import { createServer } from "node:http";
 import { networkInterfaces } from "node:os";
+import { join } from "node:path";
 import { loadConfig } from "./config.js";
+import { FileCredentialStore } from "./credentials.js";
 import { Store } from "./store.js";
 import { bearerAuth } from "./auth.js";
 import { errorMiddleware } from "./errors.js";
@@ -13,7 +15,9 @@ const store = await Store.open({
   dataDir: config.dataDir,
   startDirs: config.startDirs,
   name: config.name,
-  provider: config.provider,
+  providers: config.providers,
+  defaultModel: config.defaultModel,
+  credentials: new FileCredentialStore(join(config.home, "auth.json")),
 });
 
 const app = express();
@@ -27,7 +31,7 @@ const server = createServer(app);
 server.keepAliveTimeout = 65_000;
 server.listen(config.port, config.host, () => {
   console.log(`dpi-backend "${config.name}" (uid ${store.uid}) on http://${config.host}:${config.port}`);
-  console.log(`data: ${config.dataDir}  start dirs: ${config.startDirs.join(", ")}  provider: ${config.provider}`);
+  console.log(`data: ${config.dataDir}  start dirs: ${config.startDirs.join(", ")}  providers: ${config.providers.join(", ")}`);
   if (config.host === "0.0.0.0")
     for (const addresses of Object.values(networkInterfaces()))
       for (const a of addresses ?? [])

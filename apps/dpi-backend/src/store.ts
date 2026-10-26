@@ -37,10 +37,9 @@ import { join, dirname, resolve } from "node:path";
 import { homedir, hostname, platform } from "node:os";
 import { randomUUID } from "node:crypto";
 import { BACKGROUND_CONTEXT as ctx, withAbortSignal } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
-import { openrouterProvider } from "@earendil-works/pi-ai/providers/openrouter";
-import { curatedModels, defaultModelId } from "./model-catalog.js";
-import { fauxModels, installFaux } from "./faux.js";
+import { createModels, type MutableModels } from "@earendil-works/pi-ai/models";
+import type { CredentialStore } from "@earendil-works/pi-ai";
+import { PROVIDERS, type ProviderId } from "./providers.js";
 import {
   Harness,
   createRegistry,
@@ -90,7 +89,12 @@ export interface StoreOptions {
   dataDir: string;
   startDirs: string[];
   name: string;
-  provider: "openrouter" | "faux";
+  /** Enabled providers, in listing order; the first one's default model is the device default. */
+  providers: ProviderId[];
+  /** Must name a listed model; Store.open throws otherwise. */
+  defaultModel?: ModelRef;
+  /** Stored API keys and OAuth tokens; in-memory when absent. */
+  credentials?: CredentialStore;
 }
 
 /** Agent documents a client may read or stream, by kind. */
@@ -141,7 +145,7 @@ const decodeCursor = (cursor?: string) => {
 };
 
 export class Store {
-  readonly models = createModels();
+  readonly models: MutableModels;
   readonly opened = new Map<string, Opened>();
   readonly errors = new Map<string, string>();
   readonly catalog: DatabaseSync;
@@ -177,17 +181,8 @@ export class Store {
   }
 
   private constructor(readonly options: StoreOptions) {
-    if (options.provider === "faux") installFaux(this.models);
-    else {
-      const provider = openrouterProvider();
-      const catalog = provider.getModels();
-      for (const model of curatedModels)
-        if (!catalog.some((m) => m.id === model.id)) throw Error(`OpenRouter catalog missing ${model.id}`);
-      this.models.setProvider({
-        ...provider,
-        getModels: () => catalog.filter((m) => curatedModels.some((c) => c.id === m.id)),
-      });
-    }
+    this.models = createModels({ credentials: options.credentials });
+    for (const id of options.providers) PROVIDERS[id].install(this.models);
     mkdirSync(options.dataDir, { recursive: true, mode: 0o700 });
     this.unlockCatalog = lockFile(`${this.catalogPath}.lock`);
     this.catalog = new DatabaseSync(this.catalogPath);
@@ -211,6 +206,11 @@ export class Store {
     // Start dirs are where new sessions begin; create any that do not exist yet.
     await Promise.all(options.startDirs.map((dir) => mkdir(dir, { recursive: true }).catch(() => {})));
     try {
+      // Agents route their stored model choices against this list as they open.
+      store.modelList = await store.loadModels();
+      const wanted = options.defaultModel;
+      if (wanted && !store.listed(wanted))
+        throw Error(`DPI_DEFAULT_MODEL ${wanted.provider}/${wanted.modelId} is not available on this device`);
       store.unlockShared = lockFile(`${store.sharedStatePath}.lock`);
       store.shared = await SharedState.open(store.sharedStatePath);
       store.shared.harness.subscribeCommits(() => store.notify());
@@ -223,7 +223,6 @@ export class Store {
       }
       if (!(await store.shared.initialized()))
         await store.shared.initialize({ goal: "Explore durable agents", counter: 0, notes: [] });
-      store.modelList = await store.loadModels();
       for (const { harness } of store.opened.values()) harness.resume();
       return store;
     } catch (e) {
@@ -255,7 +254,7 @@ export class Store {
       startedAt: this.startedAt,
       startDirs: this.startDirs,
       models: this.modelList,
-      defaultModel: this.defaultModel(),
+      defaultModel: this.modelList.length ? this.defaultModelRef().modelId : undefined,
       storage: { dataDir: this.options.dataDir, catalogPath: this.catalogPath, appStatePath: this.sharedStatePath },
       codeDir: CODE_DIR,
       capabilities: ["events", "docs", "demo", "jobs"],
@@ -263,65 +262,88 @@ export class Store {
     };
   }
 
-  private defaultModel() {
-    return this.options.provider === "faux" ? fauxModels[0].id : defaultModelId;
+  private listed(model?: ModelRef) {
+    return !!model && this.modelList.some((m) => m.provider === model.provider && m.id === model.modelId);
   }
 
+  /** DPI_DEFAULT_MODEL, else the first provider's default when listed, else the first listed model. */
+  private defaultModelRef(): ModelRef {
+    if (this.options.defaultModel) return this.options.defaultModel;
+    const provider = this.options.providers[0];
+    const preferred = { provider, modelId: PROVIDERS[provider].defaultModel ?? "" };
+    if (this.listed(preferred)) return preferred;
+    const first = this.modelList[0];
+    return first ? { provider: first.provider, modelId: first.id } : preferred;
+  }
+
+  /** Lists each provider's offered models; a provider that fails is skipped so the device still starts. */
   private async loadModels(): Promise<ModelInfo[]> {
-    if (this.options.provider === "faux")
-      return fauxModels.map((m) => ({
-        id: m.id,
-        provider: "faux",
-        name: m.name,
-        tier: "T",
-        icon: "lab.png",
-        contextWindow: 128000,
-        reasoning: false,
-        cost: { input: 0, output: 0 },
-      }));
-    const available = await this.models.getAvailable("openrouter", { signal: AbortSignal.timeout(10000) });
-    return curatedModels.flatMap((c) => {
-      const m = available.find((m) => m.id === c.id);
-      return m
-        ? [
-            {
-              id: m.id,
-              provider: "openrouter",
-              name: c.name,
-              tier: c.tier,
-              icon: c.icon,
-              contextWindow: m.contextWindow,
-              reasoning: m.reasoning,
-              cost: { input: m.cost.input, output: m.cost.output },
-            },
-          ]
-        : [];
-    });
+    const list: ModelInfo[] = [];
+    for (const id of this.options.providers) {
+      const provider = PROVIDERS[id];
+      let reason: string | undefined;
+      try {
+        const signal = AbortSignal.timeout(10000);
+        if (provider.dynamic) {
+          const refreshed = await this.models.refresh({ providers: [id], signal });
+          const error = refreshed.errors.get(id);
+          if (error) throw error;
+          if (refreshed.aborted) throw Error("model list timed out");
+        }
+        const offered = provider.offer(await this.models.getAvailable(id, { signal }));
+        if (!offered.length)
+          reason = (await this.models.checkAuth(id, { signal }))
+            ? "none of its models are available"
+            : "not configured (no login or API key)";
+        for (const { model: m, name, tier, icon } of offered) {
+          const taken = list.find((l) => l.id === m.id);
+          if (taken) {
+            console.warn(`Model ${id}/${m.id} skipped: ${taken.provider} already lists that id`);
+            continue;
+          }
+          list.push({
+            id: m.id,
+            provider: id,
+            name,
+            tier,
+            icon,
+            contextWindow: m.contextWindow,
+            reasoning: m.reasoning,
+            cost: { input: m.cost.input, output: m.cost.output },
+          });
+        }
+      } catch (e) {
+        const cause = e instanceof Error && e.cause instanceof Error ? `: ${e.cause.message}` : "";
+        reason = (e instanceof Error ? e.message : String(e)) + cause;
+      }
+      if (reason) console.warn(`Provider ${id} lists no models: ${reason}`);
+    }
+    return list;
+  }
+
+  /** Listed, or curated by a provider this device enables: a subscription may list nothing for a while
+   *  (expired login, timeout at startup) and its sessions must not be re-pointed meanwhile. */
+  private served(model?: ModelRef) {
+    if (!model || this.listed(model)) return !!model;
+    const provider = model.provider as ProviderId;
+    return this.options.providers.includes(provider) && PROVIDERS[provider].curates(model.modelId);
   }
 
   routedModel(model?: ModelRef): ModelRef {
-    if (this.options.provider === "faux") {
-      const id = fauxModels.some((m) => m.id === model?.modelId) ? model!.modelId : fauxModels[0].id;
-      return { provider: "faux", modelId: id };
-    }
-    const exact = model?.provider === "openrouter" ? model.modelId : `${model?.provider}/${model?.modelId}`;
-    return {
-      provider: "openrouter",
-      modelId: curatedModels.some((m) => m.id === exact) ? exact : defaultModelId,
-    };
+    if (this.served(model)) return model!;
+    // Sessions from before multi-provider devices may name an OpenRouter model as <provider>/<modelId>.
+    const openrouter = { provider: "openrouter", modelId: `${model?.provider}/${model?.modelId}` };
+    if (this.served(openrouter)) return openrouter;
+    const fallback = this.defaultModelRef();
+    // With nothing listed there is nowhere better to go; keep the stored choice.
+    return this.listed(fallback) || !model ? fallback : model;
   }
 
   validateModel(model: unknown): ModelRef {
     const m = model as ModelRef | undefined;
     if (!m || typeof m.provider !== "string" || typeof m.modelId !== "string")
       throw invalid("model must be { provider, modelId }");
-    const known =
-      this.options.provider === "faux"
-        ? m.provider === "faux" && fauxModels.some((f) => f.id === m.modelId)
-        : m.provider === "openrouter" &&
-          curatedModels.some((c) => c.id === m.modelId) &&
-          !!this.models.getModel(m.provider, m.modelId);
-    if (!known) throw invalid(`Unknown model ${m.provider}/${m.modelId}. Choose one from GET /v1/device models`);
+    if (!this.listed(m)) throw invalid(`Unknown model ${m.provider}/${m.modelId}. Choose one from GET /v1/device models`);
     return { provider: m.provider, modelId: m.modelId };
   }
 
@@ -510,7 +532,7 @@ export class Store {
       const playground = createPlayground(this.shared, row.id, this.spawnSession, jobs);
       registry.install(playground);
       // Custom extensions are installed but not selected: an agent turns them on in its own selection.
-      const addons = createAddons({ offline: this.options.provider === "faux" });
+      const addons = createAddons({ offline: this.options.providers.includes("faux") });
       for (const extension of addons.list) registry.install(extension);
       const harness = await Harness.open(
         await openNodeSqliteStorage(row.dbPath),

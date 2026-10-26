@@ -84,7 +84,12 @@ if (values.new) {
   if (!cwd) fail(`${device.id} has no start dirs; pass --cwd`);
   const modelId = values.model ?? info.defaultModel;
   const model = info.models.find((m) => m.id === modelId);
-  if (!model) fail(`Unknown model ${modelId}. Available: ${info.models.map((m) => m.id).join(", ")}`);
+  if (!model)
+    fail(
+      info.models.length
+        ? `Unknown model ${modelId}. Available: ${info.models.map((m) => m.id).join(", ")}`
+        : `${device.id} lists no models. Log in or set a provider key on the device (just backend auth), then restart it.`,
+    );
   const created = await client
     .createSession({ name: values.new, cwd, model: { provider: model.provider, modelId: model.id } })
     .catch((e: Error) => fail(`Could not create the session: ${e.message}`));

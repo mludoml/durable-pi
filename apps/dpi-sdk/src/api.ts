@@ -66,7 +66,8 @@ export interface DeviceInfo {
   /** Where new sessions start: the directory browser opens here, relative cwds resolve against the first. */
   startDirs: string[];
   models: ModelInfo[];
-  defaultModel: string;
+  /** A listed model; absent when the device lists none. */
+  defaultModel?: string;
   storage: { dataDir: string; catalogPath: string; appStatePath: string };
   /** The checkout the backend runs from (repo root locally, `code_dir` on deployed devices). */
   codeDir?: string;

@@ -1,3 +1,4 @@
+// The OpenRouter models a device offers (provider `openrouter`; see providers.ts for the others).
 // Source: https://agenticengineer.com/model-stack, retrieved 2026-10-05.
 // Active S+, S, A and B models, matched to https://openrouter.ai/api/v1/models.
 // Gemini 4 Argon is rolling out and has no OpenRouter listing at this snapshot.

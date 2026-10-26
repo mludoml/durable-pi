@@ -18,7 +18,7 @@ const emit = defineEmits<{ close: [] }>();
 const search = ref("");
 const filtered = computed(() =>
   models.value.filter((m) =>
-    `${m.name} ${m.id} ${m.tier}`.toLowerCase().includes(search.value.toLowerCase()),
+    `${m.name} ${m.id} ${m.tier} ${m.provider}`.toLowerCase().includes(search.value.toLowerCase()),
   ),
 );
 const isCurrent = (m: ModelInfo) =>
@@ -49,7 +49,7 @@ async function choose(m: ModelInfo) {
           <X :size="18" />
         </button>
       </header>
-      <input v-model="search" placeholder="Search models or tiers…" aria-label="Search models" />
+      <input v-model="search" placeholder="Search models, tiers or providers…" aria-label="Search models" />
       <div class="model-list">
         <button
           v-for="m in filtered"

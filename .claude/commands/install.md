@@ -6,7 +6,7 @@ description: Install Durable Pi: prerequisites, .env, app dependencies, the web 
 
 ## Purpose
 
-Set up this checkout so this machine can run a `dpi-backend` device, the web hub and the terminal client. Check prerequisites, confirm the OpenRouter key, install the four network apps, build the web UI, write this machine's device config, and verify with the test suite. This is an interactive, agentic process: ask the user when a choice is needed.
+Set up this checkout so this machine can run a `dpi-backend` device, the web hub and the terminal client. Check prerequisites, confirm model access (an OpenRouter key, a subscription login or an Ollama Cloud key), install the four network apps, build the web UI, write this machine's device config, and verify with the test suite. This is an interactive, agentic process: ask the user when a choice is needed.
 
 ## Variables
 
@@ -21,7 +21,7 @@ APPS: `apps/dpi-sdk`, `apps/dpi-backend`, `apps/dpi-playground`, `apps/dpi-tui`
 ```text
 justfile                 # groups: net, backend, hub, tui, test, proactive (just/<group>/mod.just)
 dpi-network.example.yaml # template: defaults + the local device, commented ssh and exe-dev examples
-.env.example             # OPENROUTER_API_KEY (copied into each device's backend.env), optional TypeSafe and ElevenLabs settings
+.env.example             # OPENROUTER_API_KEY (copied into each device's backend.env), optional Anthropic/OpenAI/Ollama keys, TypeSafe and ElevenLabs settings
 apps/dpi-sdk/            # contract, client, models, registry, ops drivers (scripts/net.ts)
 apps/dpi-backend/        # the device server (port 4780)
 apps/dpi-playground/     # hub + Vue web UI (port 4781)
@@ -60,10 +60,16 @@ Optional, so report them and continue:
 
 ### Step 2 — Check Environment
 
-1. If `.env` is missing, copy the template: `cp .env.example .env`, then ask the user to paste their OpenRouter key into `.env` (https://openrouter.ai/keys). Do not ask for the key in chat.
-2. Confirm the key is set without printing it: `grep -Eq '^OPENROUTER_API_KEY=sk-' .env && echo set || ([ -n "$OPENROUTER_API_KEY" ] && echo "set in environment") || echo missing`.
-3. If it is missing and the user wants to continue without a key, tell them the backend can run with the free deterministic model: `DPI_PROVIDER=faux just backend run`.
-4. Optional, for the proactive demo's voice line: `grep -Eq '^ELEVENLABS_API_KEY=.+' .env && echo set || echo "not set (the demo runs, the voice line is skipped)"`. The line plays through `afplay` on macOS and in the browser elsewhere; `ELEVENLABS_VOICE_ID` picks another voice from the user's ElevenLabs account.
+1. If `.env` is missing, copy the template: `cp .env.example .env`.
+2. Ask the user how this device reaches models. Any of these works, and several can be combined:
+   - **OpenRouter key:** the user pastes it into `.env` (https://openrouter.ai/keys). Do not ask for the key in chat.
+   - **Subscription login:** `just backend login anthropic` (Claude Pro/Max) or `just backend login openai` (Sign in with ChatGPT, the Codex subscription). The user runs it, not you: it opens a browser. It needs `just install` first, so ask for it after Step 3, and confirm with `just backend auth` (shows provider and credential type, never secrets). Credentials go to `~/.dpi/auth.json`. Warn that Anthropic allows Claude subscription OAuth only in Claude Code and claude.ai, so the account may get restricted; an `ANTHROPIC_API_KEY` avoids that.
+   - **Ollama Cloud key:** the user sets `OLLAMA_API_KEY` in `.env`.
+
+   Any provider other than `openrouter` must be named in `dpi-network.yaml` under `defaults.env` (for example `DPI_PROVIDER: openrouter,anthropic,openai,ollama-cloud`), and any key other than `OPENROUTER_API_KEY` must be added to `env_keys`. Edit the file after Step 4 creates it and before `just net up local`.
+3. Confirm keys without printing them: `for k in OPENROUTER_API_KEY OLLAMA_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY; do grep -Eq "^$k=.*[^.]$" .env && echo "$k set" || echo "$k missing"; done`. The pattern skips empty values and placeholders like `sk-or-...`.
+4. If there is no model access and the user wants to continue anyway, tell them the backend can run with the free deterministic model: `DPI_PROVIDER=faux just backend run`.
+5. Optional, for the proactive demo's voice line: `grep -Eq '^ELEVENLABS_API_KEY=.+' .env && echo set || echo "not set (the demo runs, the voice line is skipped)"`. The line plays through `afplay` on macOS and in the browser elsewhere; `ELEVENLABS_VOICE_ID` picks another voice from the user's ElevenLabs account.
 
 ### Step 3 — Install Dependencies
 
@@ -74,7 +80,7 @@ Optional, so report them and continue:
 
 1. If `dpi-network.yaml` is missing, create it: `cp dpi-network.example.yaml dpi-network.yaml`. Never overwrite an existing one.
 2. `just net ids`: the file parses and lists device ids. Confirm `local` is among them.
-3. `just net up local`: writes `~/.dpi/backend.env` with a fresh `DPI_TOKEN` (or keeps an existing one), copies `OPENROUTER_API_KEY` from `.env`, and registers the device in `~/.dpi/network.sqlite`. Then confirm `test -f ~/.dpi/backend.env && stat -f '%Lp' ~/.dpi/backend.env` (Linux: `stat -c '%a'`) shows `600`. Never print the file.
+3. `just net up local`: writes `~/.dpi/backend.env` with a fresh `DPI_TOKEN` (or keeps an existing one), copies the `env_keys` from `.env` and the `env` settings, and registers the device in `~/.dpi/network.sqlite`. Then confirm `test -f ~/.dpi/backend.env && stat -f '%Lp' ~/.dpi/backend.env` (Linux: `stat -c '%a'`) shows `600`. Never print the file.
 4. `just hub build`: type-checks and builds the web UI that `just hub start` serves.
 5. Tell the user that new sessions start in `~/dpi-work` (created by `just net up local`) unless they set `start_dirs`, that any existing folder on the device works as a session cwd, and that remote machines are added by uncommenting the `ssh` or `exe-dev` example in `dpi-network.yaml` and running `just net up <id>`.
 
@@ -86,7 +92,7 @@ Optional, so report them and continue:
 
 ### Step 6 — Report
 
-Print a table with one row per check: each required prerequisite (node, npm, just, zsh, git), the `.env` key, `just install`, `just net ids`, `just net up local`, `just hub build`, `just check` and the optional items (including the proactive demo setup and the ElevenLabs key). Mark each `pass`, `fail` or `skipped`, then give a ready count (for example `11 of 11 required checks pass`).
+Print a table with one row per check: each required prerequisite (node, npm, just, zsh, git), model access (which of OpenRouter key, subscription login, Ollama Cloud key), `just install`, `just net ids`, `just net up local`, `just hub build`, `just check` and the optional items (including the proactive demo setup and the ElevenLabs key). Mark each `pass`, `fail` or `skipped`, then give a ready count (for example `11 of 11 required checks pass`).
 
 Next steps, in order (each in its own terminal):
 

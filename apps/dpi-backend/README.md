@@ -30,11 +30,33 @@ With the repo's network config, `just net up local && just backend run` does the
 | `DPI_DATA_DIR` | `$DPI_HOME/backend` | catalog, app state, `sessions/`, `archive/` |
 | `DPI_HOME` | `~/.dpi` | where `backend.env` is read (set by the service unit) |
 | `DPI_ENV_FILE` | `$DPI_HOME/backend.env` | the env file to read |
-| `DPI_PROVIDER` | `openrouter` | `faux` gives a free deterministic model for tests |
-| `OPENROUTER_API_KEY` | | model access, required unless `DPI_PROVIDER=faux`. Without it the device lists no models. Never sent to clients |
+| `DPI_PROVIDER` | `openrouter` | comma-separated providers whose models the device lists: `openrouter`, `anthropic`, `openai`, `ollama-cloud`, `faux`. `faux` gives a free deterministic model for tests and must stand alone |
+| `DPI_DEFAULT_MODEL` | | optional `<provider>/<modelId>`, split at the first `/` (`openrouter/anthropic/claude-sonnet-5.5`). The backend refuses to start if the device does not list that model |
+| `OPENROUTER_API_KEY` | | model access for `openrouter`. Without it the device lists no OpenRouter models. Never sent to clients |
+| `ANTHROPIC_API_KEY` / `ANTHROPIC_OAUTH_TOKEN` | | `anthropic` without `just backend login anthropic` |
+| `OPENAI_API_KEY` | | `openai` without `just backend login openai` |
+| `OLLAMA_API_KEY` | | model access for `ollama-cloud` |
+| `OLLAMA_HOST` | `https://ollama.com` | base URL for `ollama-cloud`. `http://localhost:11434` uses a local Ollama instead |
 | `TYPESAFE_API_KEY` | | optional: `jev-damage-control` asks Jev with it, else through OpenRouter |
 
 Flags `--port`, `--host`, `--name`, `--start-dirs`, `--data-dir` and `--env-file` override the env.
+
+## Subscriptions and providers
+
+One device can serve models from several providers at once: `DPI_PROVIDER=openrouter,anthropic,openai,ollama-cloud`. API keys go in `backend.env`. Subscriptions log in once per device:
+
+```bash
+just backend login anthropic   # Claude Pro/Max
+just backend login openai      # Sign in with ChatGPT: the ChatGPT/Codex subscription
+just backend auth              # which providers have credentials, and their type (never the secrets)
+just backend logout <provider>
+```
+
+Credentials live in `~/.dpi/auth.json` (`$DPI_HOME/auth.json`, mode 0600), in the same format as pi's `auth.json`. The backend loads its model list at startup, so restart it after a login.
+
+Ollama Cloud uses `OLLAMA_API_KEY`. Set `OLLAMA_HOST=http://localhost:11434` to point `ollama-cloud` at a local Ollama instead.
+
+`auth.json` never leaves the device it was written on. For an `ssh` or `exe-dev` device, log in on that device: `ssh <host>`, then run `just backend login <provider>` in its code dir, then `just net restart <id>`.
 
 ## Deploy to other devices
 
@@ -62,6 +84,7 @@ Templates live in [`deploy/`](deploy/). The operator skill [`.claude/skills/agen
 ```
 ~/dpi/apps/dpi-backend, ~/dpi/apps/dpi-sdk     code (rsynced; safe to replace)
 ~/.dpi/backend.env                              token + config (0600)
+~/.dpi/auth.json                                subscription logins from `just backend login` (0600)
 ~/.dpi/backend/catalog.sqlite                   sessions, agent names, device uid, idempotency keys, compaction thresholds
 ~/.dpi/backend/app-state.sqlite                 the device's shared App State (demo extension)
 ~/.dpi/backend/sessions/<uuid>/agent.sqlite     one pi-durable harness per session
