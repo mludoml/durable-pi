@@ -153,6 +153,14 @@ watch(
     select(undefined);
   },
 );
+// The selected session was in the device's tree and is gone from it: archived while its stream stayed open
+// (another tab, a script or a test suite). A session that has not shown up yet (just created) is left alone.
+watch(sessionSummary, (now, before) => {
+  if (now || !before || before.id !== selected.value?.sessionId) return;
+  if (!online.value || !device.value?.tree) return;
+  notify("That session was archived on its device.");
+  select(undefined);
+});
 
 // ------------------------------------------------------------------ derived agent views
 
