@@ -61,10 +61,10 @@ npm run build && npm run lint && npm test     # types, Vite build, Oxlint, hub t
 node tests/network-ui.mjs                     # 28 browser checks against two faux devices (after npm run build)
 DPI_DEVICE=<id> node tests/device-ui.mjs       # the web UI on one real device: turns, tools, model, App State, jobs, read only, fork, /compact, /reset
 DPI_DEVICE=<id> node tests/agent-features.mjs  # steer, dedupe, withdraw, reject, read only, subagent, job, compact, reset
-DPI_DEVICE=<id> node tests/browser-close.mjs   # quit Chrome mid-tool; the device finishes; a new browser reattaches
+DPI_DEVICE=<id> node tests/browser-close.mjs   # quit the browser mid-tool; the device finishes; a new browser reattaches
 DPI_DEVICE=<id> node tests/e2e-network.mjs     # TUI + web + restart mid-tool + fork + reattach (needs a device that runs as a service)
 ```
 
-The device suites need the hub running (`DPI_URL`, default `http://localhost:4781`). `DPI_DEVICE` defaults to `local`, except in `e2e-network.mjs`, which requires it and also drives the TUI in tmux. The browser suites use the installed Google Chrome; `HEADED=1` shows the window. Run them one device at a time, because they share the hub's persisted selection.
+The device suites need the hub running (`DPI_URL`, default `http://localhost:4781`). `DPI_DEVICE` defaults to `local`, except in `e2e-network.mjs`, which requires it and also drives the TUI in tmux. The browser suites use the installed Google Chrome by default; `DPI_TEST_BROWSER=firefox` or `chromium` uses Playwright's own build instead (`npx playwright install firefox` in `apps/dpi-playground` once; it does not touch an installed Firefox). `HEADED=1` shows the window. Run them one device at a time, because they share the hub's persisted selection.
 
 From the repo root, `just hub check` runs the first line, and `just test ui`, `just test device <id>` (device-ui, agent-features and browser-close), `just test devices` and `just test e2e <id>` run the rest. Build the web UI (`just hub build`) before the browser suites.

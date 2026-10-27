@@ -3,7 +3,8 @@
 //   DPI_URL=http://localhost:4781 DPI_DEVICE=local node tests/browser-close.mjs   (HEADED=1 to watch)
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
-const { chromium, expect } = require("@playwright/test");
+const { expect } = require("@playwright/test");
+import { launch } from "./browser.mjs";
 
 const hub = process.env.DPI_URL ?? "http://localhost:4781";
 const device = process.env.DPI_DEVICE ?? "local";
@@ -39,7 +40,6 @@ await fetch(`${hub}/api/ui-state/layout.panels`, {
   headers: { "content-type": "application/json" },
   body: JSON.stringify({ value: { tree: true, inspector: true } }),
 });
-const launch = () => chromium.launch({ channel: "chrome", headless: !process.env.HEADED });
 let browser = await launch();
 let page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
 try {

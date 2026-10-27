@@ -11,7 +11,8 @@ import { createRequire } from "node:module";
 import assert from "node:assert/strict";
 
 const require = createRequire(import.meta.url);
-const { chromium, expect } = require("@playwright/test");
+const { expect } = require("@playwright/test");
+import { launch } from "./browser.mjs";
 const hub = process.env.DPI_URL ?? "http://localhost:4781";
 const device = process.env.DPI_DEVICE;
 if (!device) {
@@ -78,7 +79,6 @@ await fetch(`${hub}/api/ui-state/layout.panels`, {
   headers: { "content-type": "application/json" },
   body: JSON.stringify({ value: { tree: true, inspector: true } }),
 });
-const launch = () => chromium.launch({ channel: "chrome", headless: !process.env.HEADED });
 let browser;
 try {
   for (const s of await get("/sessions"))

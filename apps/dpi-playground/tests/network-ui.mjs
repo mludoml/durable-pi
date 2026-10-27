@@ -11,7 +11,8 @@ import { randomBytes } from "node:crypto";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { chromium, expect } = require("@playwright/test");
+const { expect } = require("@playwright/test");
+import { launch } from "./browser.mjs";
 const app = resolve(import.meta.dirname, "..");
 const backendDir = resolve(app, "../dpi-backend");
 const tmp = mkdtempSync(join(tmpdir(), "dpi-net-ui-"));
@@ -100,7 +101,7 @@ const hub = run(
 const base = `http://localhost:${hubPort}`;
 await waitHttp(`${base}/api/network`);
 
-const browser = await chromium.launch({ channel: "chrome", headless: !process.env.HEADED });
+const browser = await launch();
 const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
 const errors = [];
 const watch = (p) => p.on("pageerror", (e) => errors.push(e.message));

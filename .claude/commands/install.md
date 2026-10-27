@@ -55,7 +55,7 @@ Optional, so report them and continue:
 
 6. `command -v ssh && command -v rsync`: needed only to deploy to remote `ssh` or `exe-dev` devices.
 7. `command -v tmux`: the TUI smoke test and the e2e scenario (`just test smoke`, `just test e2e`). `brew install tmux`.
-8. Google Chrome (`test -d "/Applications/Google Chrome.app"` on macOS, `command -v google-chrome` on Linux): the Playwright UI suites drive installed Chrome. https://www.google.com/chrome/
+8. A browser for the Playwright UI suites: Google Chrome (`test -d "/Applications/Google Chrome.app"` on macOS, `command -v google-chrome` on Linux) is the default. Without it, run `npx playwright install firefox` in `apps/dpi-playground` and set `DPI_TEST_BROWSER=firefox` for the suites (Playwright's own Firefox, separate from an installed one).
 9. `command -v curl && command -v sqlite3 && command -v openssl`: the one-request curl recipe and the smoke script.
 
 ### Step 2 — Check Environment
@@ -88,7 +88,7 @@ Optional, so report them and continue:
 
 1. `just --list`: shows the groups net, backend, hub, tui, test and proactive.
 2. `just check`: type checks and unit tests for every app. They use the faux model, so they need no network and cost nothing (under a minute).
-3. Optional, if Chrome is installed: `just test ui`, the 28-check web UI suite against two faux devices (under a minute).
+3. Optional, if a browser from item 8 is set up: `just test ui` (prefix `DPI_TEST_BROWSER=firefox` when using Playwright's Firefox), the 28-check web UI suite against two faux devices (under a minute).
 
 ### Step 6 — Report
 
