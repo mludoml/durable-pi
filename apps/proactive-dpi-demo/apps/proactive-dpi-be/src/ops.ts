@@ -1,9 +1,12 @@
 // One Durable Pi harness for the whole demo. The root conversation is the Ops desk.
 // Every incident gets its own ownerless conversation, opened in the same commit as its record.
 import { EventEmitter } from "node:events";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { BACKGROUND_CONTEXT as ctx } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
+import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
+import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
 import { openrouterProvider } from "@earendil-works/pi-ai/providers/openrouter";
 import {
   Harness,
@@ -19,6 +22,7 @@ import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { agentDbPath, repoDir, worktreesDir } from "../../../shared/paths.ts";
 import { lockFile } from "../../../shared/lock.ts";
+import { FileCredentialStore } from "../../../../dpi-backend/src/credentials.ts";
 import type { Deploy, Incident } from "../../../shared/types.ts";
 import { config } from "./config.ts";
 import { Deploys, Incidents, createExtensions, logLine } from "./extensions.ts";
@@ -46,15 +50,20 @@ export class Ops extends EventEmitter {
   }
 
   static async open(store: WatchStore, voice: Voice) {
-    const models = createModels();
-    const provider = openrouterProvider();
+    // Subscription logins are the device's: the same auth.json `just backend login` writes.
+    const home = process.env.DPI_HOME?.replace(/^~(?=$|\/)/, homedir()) ?? join(homedir(), ".dpi");
+    const models = createModels({ credentials: new FileCredentialStore(join(home, "auth.json")) });
+    const provider = { openrouter: openrouterProvider, anthropic: anthropicProvider, openai: openaiProvider }[config.provider]();
     const catalog = provider.getModels();
     if (!catalog.some((m) => m.id === config.model))
-      throw Error(`OpenRouter has no model ${config.model}`);
+      throw Error(`${provider.name ?? config.provider} has no model ${config.model}`);
+    // OpenRouter offers the curated list; a subscription offers the one model the demo was started with.
     models.setProvider({
       ...provider,
       getModels: () =>
-        catalog.filter((m) => m.id === config.model || curatedModels.some((c) => c.id === m.id)),
+        catalog.filter(
+          (m) => m.id === config.model || (config.provider === "openrouter" && curatedModels.some((c) => c.id === m.id)),
+        ),
     });
     let ops: Ops | undefined;
     const extensions = createExtensions({
@@ -92,7 +101,7 @@ export class Ops extends EventEmitter {
       );
       const root = await harness.root(ctx, {
         agent: {
-          model: { provider: "openrouter", modelId: config.model },
+          model: { provider: config.provider, modelId: config.model },
           thinkingLevel: config.thinking,
           extensions: [extensions.OpsTools, extensions.Desk],
           cwd: repoDir,
@@ -140,7 +149,7 @@ export class Ops extends EventEmitter {
       const branch = `incident/${slug}`;
       const conversation = await tx.createConversation({ ownership: { kind: "ownerless" } });
       await configure(tx, conversation.id, {
-        model: { provider: "openrouter", modelId: config.model },
+        model: { provider: config.provider, modelId: config.model },
         thinkingLevel: config.thinking,
         extensions: [CodingTools, this.extensions.OpsTools, this.extensions.IncidentAgent],
         cwd: worktree,
@@ -246,6 +255,12 @@ Your worktree ${incident.worktree} is checkout-api on branch ${incident.branch},
   }
 
   modelList() {
+    if (config.provider !== "openrouter") {
+      const m = this.models.getModel(config.provider, config.model);
+      return m
+        ? [{ id: m.id, provider: config.provider, name: m.name, tier: "sub", icon: config.provider === "openai" ? "openai.png" : "anthropic.png", contextWindow: m.contextWindow }]
+        : [];
+    }
     return curatedModels.flatMap((c) => {
       const m = this.models.getModel("openrouter", c.id);
       return m
@@ -284,7 +299,7 @@ Your worktree ${incident.worktree} is checkout-api on branch ${incident.branch},
         };
       case "configure": {
         const model = body.model as ModelRef | undefined;
-        if (model && (model.provider !== "openrouter" || !this.models.getModel("openrouter", model.modelId)))
+        if (model && (model.provider !== config.provider || !this.models.getModel(config.provider, model.modelId)))
           throw Error("Choose a model from the list");
         if (body.thinkingLevel !== undefined && !THINKING.includes(String(body.thinkingLevel)))
           throw Error("Invalid thinking level");

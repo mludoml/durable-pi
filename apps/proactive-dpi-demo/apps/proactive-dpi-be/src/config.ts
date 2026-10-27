@@ -1,7 +1,8 @@
 import { existsSync } from "node:fs";
 import { projectEnvPath } from "../../../shared/paths.ts";
 
-// OPENROUTER_API_KEY and ELEVENLABS_API_KEY live in the project root .env.
+// OPENROUTER_API_KEY, TYPESAFE_API_KEY and ELEVENLABS_API_KEY live in the project root .env. Subscription logins
+// (--provider anthropic|openai) come from `just backend login` in <DPI_HOME>/auth.json, shared with dpi-backend.
 if (existsSync(projectEnvPath)) process.loadEnvFile(projectEnvPath);
 
 const args = process.argv.slice(2);
@@ -14,13 +15,22 @@ const option = (key: string, fallback: string) => {
 // Host playback uses afplay, which only macOS has. Elsewhere the voice plays in the browser.
 const tts = option("--tts", process.platform === "darwin" ? "host" : "browser");
 if (!["host", "browser", "both", "off"].includes(tts)) throw Error("--tts is host, browser, both, or off");
+const provider = option("--provider", "openrouter");
+if (!["openrouter", "anthropic", "openai"].includes(provider)) throw Error("--provider is openrouter, anthropic, or openai");
+const DEFAULT_MODEL: Record<string, string> = {
+  openrouter: "anthropic/claude-sonnet-5.5",
+  anthropic: "claude-sonnet-5-5",
+  openai: "gpt-6-sol",
+};
 
 export const config = {
   port: Number(option("--port", "4790")),
   /** Loopback by default: the UI has no login and the incident agent runs bash. Pass --host 0.0.0.0 for a LAN. */
   host: option("--host", "127.0.0.1"),
   dev: args.includes("--dev"),
-  model: option("--model", "anthropic/claude-sonnet-5.5"),
+  /** Where the incident agents' model runs: OpenRouter (API key) or a subscription login. */
+  provider: provider as "openrouter" | "anthropic" | "openai",
+  model: option("--model", DEFAULT_MODEL[provider]),
   thinking: option("--thinking", "high") as "off" | "minimal" | "low" | "medium" | "high" | "xhigh",
   /** Incident verdicts sharing one fingerprint inside the window that open an incident. */
   incidentThreshold: Number(option("--incident-threshold", "3")),

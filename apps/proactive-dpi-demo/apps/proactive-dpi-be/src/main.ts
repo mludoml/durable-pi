@@ -203,7 +203,7 @@ if (config.dev) {
 }
 server.listen(config.port, config.host, () => {
   console.log(
-    `Proactive DPI: http://localhost:${config.port}\n  jev ${jev.provider}  model ${config.model}  tts ${config.tts}  incident after ${config.incidentThreshold} incident or ${config.suspiciousThreshold} suspicious verdicts in ${config.windowMs / 1000}s`,
+    `Proactive DPI: http://localhost:${config.port}\n  jev ${jev.provider}  model ${config.provider}/${config.model}  tts ${config.tts}  incident after ${config.incidentThreshold} incident or ${config.suspiciousThreshold} suspicious verdicts in ${config.windowMs / 1000}s`,
   );
   if (config.host !== "0.0.0.0") return;
   for (const addresses of Object.values(networkInterfaces()))

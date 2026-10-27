@@ -20,6 +20,8 @@ From the project root, `just proactive` lists install, build, reset, start, take
 
 Keys come from the project root `.env`. `OPENROUTER_API_KEY` covers Claude Sonnet 5.5 and Jev (`~typesafe/jev-latest`). `ELEVENLABS_API_KEY` covers the voice (default voice Emma from the ElevenLabs voice library; set `ELEVENLABS_VOICE_ID` to any voice in your account). Without it the line shows only as a toast. With `--tts browser` (the default off macOS), click the page once so the browser allows audio. `TYPESAFE_API_KEY`, when set, sends Jev calls to TypeSafe directly. `npm run dev` adds Vue hot reload. `npm run logs` and `npm run be` run the two processes separately.
 
+`--provider anthropic` or `--provider openai` runs the agents on a subscription instead of OpenRouter (`just proactive take --provider anthropic`), using the login `just backend login <provider>` saved in `~/.dpi/auth.json` (or `$DPI_HOME/auth.json`). The model defaults to `claude-sonnet-5-5` or `gpt-6-sol`; `--model` picks another of that provider's ids, and the model picker offers only that one. With TypeSafe for Jev and a subscription for the agents, the demo needs no OpenRouter key. Anthropic allows Claude subscription OAuth only in Claude Code and claude.ai, so `--provider anthropic` may get the account restricted.
+
 Run `npm run reset` before every take. The demo must be stopped first.
 
 ## Demo timeline
