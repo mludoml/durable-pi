@@ -28,6 +28,11 @@ const freePort = () =>
     });
   });
 const children = new Set();
+// A throw before the try/finally below (a browser that fails to launch) must not leave the faux devices running.
+process.on("exit", () => {
+  for (const child of children) child.kill("SIGKILL");
+  rmSync(tmp, { recursive: true, force: true });
+});
 function run(args, env, cwd) {
   const child = spawn(process.execPath, ["--import", "tsx", ...args], {
     cwd,
