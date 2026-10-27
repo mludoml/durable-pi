@@ -74,7 +74,7 @@ try {
     )
     .toBe(true);
   await browser.close();
-  console.log("CLOSED CHROME PROCESS");
+  console.log(`CLOSED ${(process.env.DPI_TEST_BROWSER ?? "chrome").toUpperCase()} PROCESS`);
   await expect.poll(async () => !(await get(a)).busy, { timeout: 180000 }).toBe(true);
   const entries = (await get(`${a}/entries?scope=active&limit=1000`)).items;
   expect(JSON.stringify(entries)).toContain("FULL_BROWSER_QUIT_OK");
